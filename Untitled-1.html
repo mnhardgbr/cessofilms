@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="pt-BR" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cesso Films - Controle de Estoque</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Outfit', sans-serif; }
+    .toast-enter { animation: slideIn 0.3s ease; }
+    .toast-exit { animation: slideOut 0.3s ease forwards; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity:0; } to { transform: translateX(0); opacity:1; } }
+    @keyframes slideOut { from { transform: translateX(0); opacity:1; } to { transform: translateX(100%); opacity:0; } }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.3s ease; }
+    .low-stock-pulse { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1a1a2e; }
+    ::-webkit-scrollbar-thumb { background: #3a3a5c; border-radius: 3px; }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+ </head>
+ <body class="h-full">
+  <div id="app" class="w-full h-full bg-[#0f0f1e] text-[#e2e2e2] overflow-auto">
+   <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+   <div class="max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-0">
+    <div class="flex gap-2 border-b border-[#2a2a4a]">
+     <button id="tab-products" onclick="switchTab('products')" class="px-4 py-3 font-medium text-sm border-b-2 border-amber-500 text-amber-400 transition">Produtos</button> <button id="tab-movements" onclick="switchTab('movements')" class="px-4 py-3 font-medium text-sm border-b-2 border-transparent text-[#7a7a9a] hover:text-[#e2e2e2] transition">Movimentações</button>
+    </div>
+   </div>
+   <div id="delete-modal" class="fixed inset-0 z-40 hidden items-center justify-center" style="background:rgba(0,0,0,0.6)">
+    <div class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl p-6 max-w-sm mx-4 fade-in">
+     <h3 class="text-lg font-semibold text-[#e2e2e2] mb-2">Confirmar exclusão</h3>
+     <p class="text-sm text-[#a0a0b8] mb-5">Tem certeza que deseja excluir este item?</p>
+     <div class="flex gap-3 justify-end"><button onclick="closeDeleteModal()" class="px-4 py-2 rounded-lg text-sm font-medium text-[#a0a0b8] hover:bg-[#2a2a4a] transition">Cancelar</button> <button id="confirm-delete-btn" class="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-700 text-white transition">Excluir</button>
+     </div>
+    </div>
+   </div>
+   <header class="w-full border-b border-[#1e1e38] bg-[#13132a] sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+     <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center font-bold text-white text-lg">
+       C
+      </div>
+      <div>
+       <h1 id="el-company-name" class="text-lg font-bold text-[#e2e2e2] leading-tight">Cesso Films</h1>
+       <p id="el-subtitle" class="text-xs text-[#7a7a9a]">Controle de Estoque</p>
+      </div>
+     </div><button onclick="openForm()" class="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-[#0f0f1e] font-semibold text-sm px-4 py-2.5 rounded-xl transition"> <i data-lucide="plus" style="width:16px;height:16px;"></i> <span class="hidden sm:inline">Novo Item</span> </button>
+    </div>
+   </header>
+   <div class="max-w-7xl mx-auto px-4 sm:px-6 py-5">
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+     <div class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-4">
+      <p class="text-xs text-[#7a7a9a] mb-1">Total de Itens</p>
+      <p id="stat-total" class="text-2xl font-bold text-[#e2e2e2]">0</p>
+     </div>
+     <div class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-4">
+      <p class="text-xs text-[#7a7a9a] mb-1">Categorias</p>
+      <p id="stat-categories" class="text-2xl font-bold text-[#e2e2e2]">0</p>
+     </div>
+     <div class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-4">
+      <p class="text-xs text-[#7a7a9a] mb-1">Estoque Baixo</p>
+      <p id="stat-low" class="text-2xl font-bold text-amber-400">0</p>
+     </div>
+     <div class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-4">
+      <p class="text-xs text-[#7a7a9a] mb-1">Valor Total</p>
+      <p id="stat-value" class="text-2xl font-bold text-emerald-400">R$ 0</p>
+     </div>
+     <div class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-4">
+      <p class="text-xs text-[#7a7a9a] mb-1">Movimentações</p>
+      <p id="stat-movements" class="text-2xl font-bold text-blue-400">0</p>
+     </div>
+    </div>
+   </div>
+   <div id="products-tab">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
+     <div class="flex flex-col sm:flex-row gap-3">
+      <div class="relative flex-1"><i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-[#5a5a7a]" style="width:16px;height:16px;"></i> <input id="search-input" type="text" placeholder="Buscar produto..." class="w-full bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl pl-10 pr-4 py-2.5 text-sm text-[#e2e2e2] placeholder-[#5a5a7a] focus:outline-none focus:border-amber-500 transition">
+      </div><select id="filter-category" class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl px-4 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition"> <option value="">Todas Categorias</option> </select> <select id="filter-stock" class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl px-4 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition"> <option value="">Todo Estoque</option> <option value="low">Estoque Baixo</option> <option value="ok">Estoque OK</option> <option value="zero">Sem Estoque</option> </select>
+     </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 pb-8">
+     <div id="product-list" class="space-y-2 pt-3"></div>
+     <div id="empty-state" class="text-center py-16 hidden">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-[#1a1a2e] flex items-center justify-center"><i data-lucide="package" class="text-[#3a3a5c]" style="width:28px;height:28px;"></i>
+      </div>
+      <p class="text-[#5a5a7a] text-sm">Nenhum produto cadastrado.</p>
+      <p class="text-[#3a3a5c] text-xs mt-1">Clique em "Novo Item" para começar.</p>
+     </div>
+    </div>
+   </div>
+   <div id="movements-tab" class="hidden">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 pb-3">
+     <div class="flex flex-col sm:flex-row gap-3"><button onclick="openMovementForm('entrada')" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition"><i data-lucide="arrow-down" style="width:16px;height:16px;"></i><span class="hidden sm:inline">Entrada</span></button> <button onclick="openMovementForm('saida')" class="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-4 py-2.5 rounded-xl transition"><i data-lucide="arrow-up" style="width:16px;height:16px;"></i><span class="hidden sm:inline">Saída</span></button> <select id="movement-filter" class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl px-4 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition"> <option value="">Todas as Movimentações</option> <option value="entrada">Apenas Entradas</option> <option value="saida">Apenas Saídas</option> </select>
+     </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 pb-8">
+     <div id="movement-list" class="space-y-2 pt-3"></div>
+     <div id="movement-empty" class="text-center py-16">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-[#1a1a2e] flex items-center justify-center"><i data-lucide="history" class="text-[#3a3a5c]" style="width:28px;height:28px;"></i>
+      </div>
+      <p class="text-[#5a5a7a] text-sm">Nenhuma movimentação registrada.</p>
+     </div>
+    </div>
+   </div>
+   <div id="form-modal" class="fixed inset-0 z-40 hidden items-center justify-center" style="background:rgba(0,0,0,0.6)">
+    <div class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90%] overflow-auto fade-in">
+     <div class="flex items-center justify-between mb-5">
+      <h3 id="form-title" class="text-lg font-semibold text-[#e2e2e2]">Novo Item</h3><button onclick="closeForm()" class="text-[#5a5a7a] hover:text-[#e2e2e2] transition"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+     </div>
+     <form id="product-form" class="space-y-4" onsubmit="return false;">
+      <div><label for="f-name" class="block text-xs font-medium text-[#7a7a9a] mb-1">Nome do Produto *</label> <input id="f-name" type="text" required class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition" placeholder="Ex: Película Fumê 5%">
+      </div>
+      <div><label for="f-category" class="block text-xs font-medium text-[#7a7a9a] mb-1">Categoria *</label> <input id="f-category" type="text" required list="category-list" class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition" placeholder="Ex: Películas, PPF, Acessórios"> <datalist id="category-list"></datalist>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+       <div><label for="f-quantity" class="block text-xs font-medium text-[#7a7a9a] mb-1">Quantidade *</label> <input id="f-quantity" type="number" required min="0" class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition" placeholder="0">
+       </div>
+       <div><label for="f-unit" class="block text-xs font-medium text-[#7a7a9a] mb-1">Unidade</label> <select id="f-unit" class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition"> <option value="un">Unidade</option> <option value="m">Metro</option> <option value="m²">Metro²</option> <option value="rolo">Rolo</option> <option value="litro">Litro</option> <option value="kit">Kit</option> </select>
+       </div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+       <div><label for="f-price" class="block text-xs font-medium text-[#7a7a9a] mb-1">Preço (R$)</label> <input id="f-price" type="number" min="0" step="0.01" class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition" placeholder="0.00">
+       </div>
+       <div><label for="f-min-stock" class="block text-xs font-medium text-[#7a7a9a] mb-1">Estoque Mínimo</label> <input id="f-min-stock" type="number" min="0" class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition" placeholder="5">
+       </div>
+      </div>
+      <div><label for="f-notes" class="block text-xs font-medium text-[#7a7a9a] mb-1">Observações</label> <textarea id="f-notes" rows="2" class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition resize-none" placeholder="Notas adicionais..."></textarea>
+      </div><button id="form-submit-btn" type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-[#0f0f1e] font-semibold text-sm py-3 rounded-xl transition flex items-center justify-center gap-2"> <span id="form-submit-text">Cadastrar</span> <span id="form-spinner" class="hidden w-4 h-4 border-2 border-[#0f0f1e] border-t-transparent rounded-full animate-spin"></span> </button>
+     </form>
+    </div>
+   </div>
+   <div id="movement-modal" class="fixed inset-0 z-40 hidden items-center justify-center" style="background:rgba(0,0,0,0.6)">
+    <div class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90%] overflow-auto fade-in">
+     <div class="flex items-center justify-between mb-5">
+      <h3 id="movement-title" class="text-lg font-semibold text-[#e2e2e2]">Registrar Entrada</h3><button onclick="closeMovementForm()" class="text-[#5a5a7a] hover:text-[#e2e2e2] transition"><i data-lucide="x" style="width:20px;height:20px;"></i></button>
+     </div>
+     <form id="movement-form" class="space-y-4" onsubmit="return false;">
+      <div><label for="m-product" class="block text-xs font-medium text-[#7a7a9a] mb-1">Produto *</label> <select id="m-product" required class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition"> <option value="">Selecione um produto</option> </select>
+      </div>
+      <div><label for="m-qty" class="block text-xs font-medium text-[#7a7a9a] mb-1">Quantidade *</label> <input id="m-qty" type="number" required min="1" class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition" placeholder="1">
+      </div>
+      <div><label for="m-reason" class="block text-xs font-medium text-[#7a7a9a] mb-1">Motivo</label> <select id="m-reason" class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition"> <option value="">Selecione um motivo</option> <option value="compra">Compra</option> <option value="devolucao">Devolução</option> <option value="ajuste">Ajuste</option> <option value="outro">Outro</option> </select>
+      </div>
+      <div><label for="m-user" class="block text-xs font-medium text-[#7a7a9a] mb-1">Responsável</label> <input id="m-user" type="text" class="w-full bg-[#0f0f1e] border border-[#2a2a4a] rounded-lg px-3 py-2.5 text-sm text-[#e2e2e2] focus:outline-none focus:border-amber-500 transition" placeholder="Seu nome">
+      </div><button id="movement-submit-btn" type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm py-3 rounded-xl transition flex items-center justify-center gap-2"> <span id="movement-submit-text">Registrar</span> <span id="movement-spinner" class="hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span> </button>
+     </form>
+    </div>
+   </div>
+  </div>
+  <script>
+  let allData = [];
+  let allMovements = [];
+  let editingItem = null;
+  let deleteTarget = null;
+  let currentTab = 'products';
+  let movementType = 'entrada';
+
+  const defaultConfig = {
+    company_name: 'Cesso Films',
+    subtitle: 'Controle de Estoque',
+    background_color: '#0f0f1e',
+    surface_color: '#1a1a2e',
+    text_color: '#e2e2e2',
+    primary_action_color: '#f59e0b',
+    secondary_action_color: '#7a7a9a',
+    font_family: 'Outfit',
+    font_size: 14
+  };
+
+  window.elementSdk.init({
+    defaultConfig,
+    onConfigChange: async (config) => {
+      const bg = config.background_color || defaultConfig.background_color;
+      const surface = config.surface_color || defaultConfig.surface_color;
+      const text = config.text_color || defaultConfig.text_color;
+      const primary = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondary = config.secondary_action_color || defaultConfig.secondary_action_color;
+      const font = config.font_family || defaultConfig.font_family;
+      const size = config.font_size || defaultConfig.font_size;
+
+      document.getElementById('app').style.backgroundColor = bg;
+      document.getElementById('app').style.color = text;
+      document.getElementById('app').style.fontFamily = `${font}, sans-serif`;
+      document.getElementById('app').style.fontSize = `${size}px`;
+
+      document.getElementById('el-company-name').textContent = config.company_name || defaultConfig.company_name;
+      document.getElementById('el-subtitle').textContent = config.subtitle || defaultConfig.subtitle;
+
+      document.querySelectorAll('header').forEach(el => el.style.backgroundColor = surface);
+      renderList();
+      renderMovements();
+    },
+    mapToCapabilities: (config) => ({
+      recolorables: [
+        { get: () => config.background_color || defaultConfig.background_color, set: (v) => { config.background_color = v; window.elementSdk.setConfig({ background_color: v }); } },
+        { get: () => config.surface_color || defaultConfig.surface_color, set: (v) => { config.surface_color = v; window.elementSdk.setConfig({ surface_color: v }); } },
+        { get: () => config.text_color || defaultConfig.text_color, set: (v) => { config.text_color = v; window.elementSdk.setConfig({ text_color: v }); } },
+        { get: () => config.primary_action_color || defaultConfig.primary_action_color, set: (v) => { config.primary_action_color = v; window.elementSdk.setConfig({ primary_action_color: v }); } },
+        { get: () => config.secondary_action_color || defaultConfig.secondary_action_color, set: (v) => { config.secondary_action_color = v; window.elementSdk.setConfig({ secondary_action_color: v }); } }
+      ],
+      borderables: [],
+      fontEditable: { get: () => config.font_family || defaultConfig.font_family, set: (v) => { config.font_family = v; window.elementSdk.setConfig({ font_family: v }); } },
+      fontSizeable: { get: () => config.font_size || defaultConfig.font_size, set: (v) => { config.font_size = v; window.elementSdk.setConfig({ font_size: v }); } }
+    }),
+    mapToEditPanelValues: (config) => new Map([
+      ['company_name', config.company_name || defaultConfig.company_name],
+      ['subtitle', config.subtitle || defaultConfig.subtitle]
+    ])
+  });
+
+  const dataHandler = {
+    onDataChanged(data) {
+      allData = data.filter(d => d.name && !d.movement_type);
+      allMovements = data.filter(d => d.movement_type);
+      updateStats();
+      updateCategoryFilter();
+      updateProductSelect();
+      renderList();
+      renderMovements();
+    }
+  };
+  window.dataSdk.init(dataHandler);
+
+  document.getElementById('search-input').addEventListener('input', renderList);
+  document.getElementById('filter-category').addEventListener('change', renderList);
+  document.getElementById('filter-stock').addEventListener('change', renderList);
+  document.getElementById('movement-filter').addEventListener('change', renderMovements);
+
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('products-tab').classList.toggle('hidden', tab !== 'products');
+    document.getElementById('movements-tab').classList.toggle('hidden', tab !== 'movements');
+    document.getElementById('tab-products').classList.toggle('border-amber-500', tab === 'products');
+    document.getElementById('tab-products').classList.toggle('text-amber-400', tab === 'products');
+    document.getElementById('tab-products').classList.toggle('border-transparent', tab !== 'products');
+    document.getElementById('tab-products').classList.toggle('text-[#7a7a9a]', tab !== 'products');
+    document.getElementById('tab-movements').classList.toggle('border-amber-500', tab === 'movements');
+    document.getElementById('tab-movements').classList.toggle('text-amber-400', tab === 'movements');
+    document.getElementById('tab-movements').classList.toggle('border-transparent', tab !== 'movements');
+    document.getElementById('tab-movements').classList.toggle('text-[#7a7a9a]', tab !== 'movements');
+  }
+
+  function getFiltered() {
+    const search = document.getElementById('search-input').value.toLowerCase();
+    const cat = document.getElementById('filter-category').value;
+    const stock = document.getElementById('filter-stock').value;
+    return allData.filter(item => {
+      if (search && !item.name.toLowerCase().includes(search) && !(item.category||'').toLowerCase().includes(search)) return false;
+      if (cat && item.category !== cat) return false;
+      if (stock === 'low' && !(item.quantity > 0 && item.quantity <= (item.min_stock || 5))) return false;
+      if (stock === 'ok' && !(item.quantity > (item.min_stock || 5))) return false;
+      if (stock === 'zero' && item.quantity !== 0) return false;
+      return true;
+    });
+  }
+
+  function getFilteredMovements() {
+    const filter = document.getElementById('movement-filter').value;
+    if (!filter) return allMovements;
+    return allMovements.filter(m => m.movement_type === filter);
+  }
+
+  function updateStats() {
+    document.getElementById('stat-total').textContent = allData.length;
+    const cats = new Set(allData.map(i => i.category).filter(Boolean));
+    document.getElementById('stat-categories').textContent = cats.size;
+    const low = allData.filter(i => i.quantity <= (i.min_stock || 5)).length;
+    document.getElementById('stat-low').textContent = low;
+    const val = allData.reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0);
+    document.getElementById('stat-value').textContent = 'R$ ' + val.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    document.getElementById('stat-movements').textContent = allMovements.length;
+  }
+
+  function updateCategoryFilter() {
+    const sel = document.getElementById('filter-category');
+    const current = sel.value;
+    const cats = [...new Set(allData.map(i => i.category).filter(Boolean))].sort();
+    const dl = document.getElementById('category-list');
+    dl.innerHTML = cats.map(c => `<option value="${esc(c)}">`).join('');
+    sel.innerHTML = '<option value="">Todas Categorias</option>' + cats.map(c => `<option value="${esc(c)}"${c===current?' selected':''}>${esc(c)}</option>`).join('');
+  }
+
+  function updateProductSelect() {
+    const sel = document.getElementById('m-product');
+    const prods = allData.map(p => ({ id: p.__backendId, name: p.name })).sort((a, b) => a.name.localeCompare(b.name));
+    sel.innerHTML = '<option value="">Selecione um produto</option>' + prods.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  }
+
+  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  function renderList() {
+    const list = document.getElementById('product-list');
+    const empty = document.getElementById('empty-state');
+    const filtered = getFiltered();
+
+    if (allData.length === 0) {
+      list.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+
+    if (filtered.length === 0) {
+      list.innerHTML = '<p class="text-center text-[#5a5a7a] py-8 text-sm">Nenhum resultado encontrado.</p>';
+      return;
+    }
+
+    const existingMap = new Map([...list.children].map(el => [el.dataset.id, el]));
+    const fragment = document.createDocumentFragment();
+    const newIds = new Set(filtered.map(i => i.__backendId));
+
+    filtered.forEach(item => {
+      const id = item.__backendId;
+      let el = existingMap.get(id);
+      if (el) {
+        updateCard(el, item);
+        existingMap.delete(id);
+      } else {
+        el = createCard(item);
+      }
+      fragment.appendChild(el);
+    });
+
+    existingMap.forEach(el => el.remove());
+    list.innerHTML = '';
+    list.appendChild(fragment);
+  }
+
+  function renderMovements() {
+    const list = document.getElementById('movement-list');
+    const empty = document.getElementById('movement-empty');
+    const filtered = getFilteredMovements();
+
+    if (allMovements.length === 0) {
+      list.innerHTML = '';
+      empty.classList.remove('hidden');
+      return;
+    }
+    empty.classList.add('hidden');
+
+    if (filtered.length === 0) {
+      list.innerHTML = '<p class="text-center text-[#5a5a7a] py-8 text-sm">Nenhuma movimentação encontrada.</p>';
+      return;
+    }
+
+    list.innerHTML = filtered.map(m => {
+      const isEntrada = m.movement_type === 'entrada';
+      const color = isEntrada ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30';
+      const icon = isEntrada ? 'arrow-down' : 'arrow-up';
+      const iconColor = isEntrada ? 'text-emerald-400' : 'text-red-400';
+      const date = new Date(m.movement_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const product = allData.find(p => p.__backendId === m.product_id);
+      return `
+        <div class="bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-4 flex items-start gap-3">
+          <div class="${color} border rounded-lg w-10 h-10 flex items-center justify-center flex-shrink-0">
+            <i data-lucide="${icon}" class="${iconColor}" style="width:18px;height:18px;"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-semibold text-sm text-[#e2e2e2]">${esc(product?.name || 'Produto removido')}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full ${isEntrada?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'} font-medium">${isEntrada?'Entrada':'Saída'} +${m.movement_qty}</span>
+            </div>
+            <div class="text-xs text-[#7a7a9a] mt-1">
+              <div>${m.movement_reason ? `Motivo: ${esc(m.movement_reason)}` : 'Sem motivo especificado'}</div>
+              <div>${m.movement_user ? `Responsável: ${esc(m.movement_user)}` : ''}</div>
+              <div class="mt-1">${date}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    lucide.createIcons();
+  }
+
+  function stockStatus(item) {
+    if (item.quantity === 0) return { label: 'Sem Estoque', cls: 'bg-red-500/20 text-red-400', pulse: true };
+    if (item.quantity <= (item.min_stock || 5)) return { label: 'Estoque Baixo', cls: 'bg-amber-500/20 text-amber-400', pulse: true };
+    return { label: 'OK', cls: 'bg-emerald-500/20 text-emerald-400', pulse: false };
+  }
+
+  function createCard(item) {
+    const div = document.createElement('div');
+    div.dataset.id = item.__backendId;
+    div.className = 'bg-[#1a1a2e] border border-[#2a2a4a] rounded-xl p-4 flex items-center gap-4 fade-in hover:border-[#3a3a5c] transition';
+    updateCard(div, item);
+    return div;
+  }
+
+  function updateCard(el, item) {
+    const st = stockStatus(item);
+    el.innerHTML = `
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="font-semibold text-sm text-[#e2e2e2] truncate">${esc(item.name)}</span>
+          <span class="text-[10px] px-2 py-0.5 rounded-full ${st.cls} font-medium ${st.pulse?'low-stock-pulse':''}">${st.label}</span>
+        </div>
+        <div class="flex items-center gap-3 mt-1 text-xs text-[#7a7a9a]">
+          <span>${esc(item.category || 'Sem categoria')}</span>
+          <span>•</span>
+          <span>${item.quantity} ${esc(item.unit || 'un')}</span>
+          ${item.price ? `<span>•</span><span>R$ ${Number(item.price).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>` : ''}
+        </div>
+        ${item.notes ? `<p class="text-xs text-[#5a5a7a] mt-1 truncate">${esc(item.notes)}</p>` : ''}
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <button onclick="adjustQty('${item.__backendId}', -1)" class="w-8 h-8 rounded-lg bg-[#0f0f1e] hover:bg-[#2a2a4a] flex items-center justify-center text-[#7a7a9a] hover:text-[#e2e2e2] transition" title="Diminuir"><i data-lucide="minus" style="width:14px;height:14px;"></i></button>
+        <button onclick="adjustQty('${item.__backendId}', 1)" class="w-8 h-8 rounded-lg bg-[#0f0f1e] hover:bg-[#2a2a4a] flex items-center justify-center text-[#7a7a9a] hover:text-[#e2e2e2] transition" title="Aumentar"><i data-lucide="plus" style="width:14px;height:14px;"></i></button>
+        <button onclick="editItem('${item.__backendId}')" class="w-8 h-8 rounded-lg bg-[#0f0f1e] hover:bg-[#2a2a4a] flex items-center justify-center text-[#7a7a9a] hover:text-amber-400 transition" title="Editar"><i data-lucide="edit" style="width:14px;height:14px;"></i></button>
+        <button onclick="confirmDelete('${item.__backendId}')" class="w-8 h-8 rounded-lg bg-[#0f0f1e] hover:bg-red-500/20 flex items-center justify-center text-[#7a7a9a] hover:text-red-400 transition" title="Excluir"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+
+  async function adjustQty(id, delta) {
+    const item = allData.find(i => i.__backendId === id);
+    if (!item) return;
+    const newQty = Math.max(0, (item.quantity || 0) + delta);
+    const result = await window.dataSdk.update({ ...item, quantity: newQty });
+    if (result.isError) showToast('Erro ao atualizar quantidade', 'error');
+  }
+
+  function openForm() {
+    editingItem = null;
+    document.getElementById('form-title').textContent = 'Novo Item';
+    document.getElementById('form-submit-text').textContent = 'Cadastrar';
+    document.getElementById('product-form').reset();
+    document.getElementById('form-modal').classList.remove('hidden');
+    document.getElementById('form-modal').classList.add('flex');
+    lucide.createIcons();
+  }
+
+  function closeForm() {
+    document.getElementById('form-modal').classList.add('hidden');
+    document.getElementById('form-modal').classList.remove('flex');
+    editingItem = null;
+  }
+
+  function editItem(id) {
+    const item = allData.find(i => i.__backendId === id);
+    if (!item) return;
+    editingItem = item;
+    document.getElementById('form-title').textContent = 'Editar Item';
+    document.getElementById('form-submit-text').textContent = 'Salvar';
+    document.getElementById('f-name').value = item.name || '';
+    document.getElementById('f-category').value = item.category || '';
+    document.getElementById('f-quantity').value = item.quantity ?? '';
+    document.getElementById('f-unit').value = item.unit || 'un';
+    document.getElementById('f-price').value = item.price ?? '';
+    document.getElementById('f-min-stock').value = item.min_stock ?? '';
+    document.getElementById('f-notes').value = item.notes || '';
+    document.getElementById('form-modal').classList.remove('hidden');
+    document.getElementById('form-modal').classList.add('flex');
+    lucide.createIcons();
+  }
+
+  document.getElementById('product-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('form-submit-btn');
+    const spinner = document.getElementById('form-spinner');
+    const txt = document.getElementById('form-submit-text');
+    btn.disabled = true;
+    spinner.classList.remove('hidden');
+
+    const data = {
+      name: document.getElementById('f-name').value.trim(),
+      category: document.getElementById('f-category').value.trim(),
+      quantity: parseInt(document.getElementById('f-quantity').value) || 0,
+      unit: document.getElementById('f-unit').value,
+      price: parseFloat(document.getElementById('f-price').value) || 0,
+      min_stock: parseInt(document.getElementById('f-min-stock').value) || 5,
+      notes: document.getElementById('f-notes').value.trim(),
+      created_at: editingItem ? editingItem.created_at : new Date().toISOString()
+    };
+
+    let result;
+    if (editingItem) {
+      result = await window.dataSdk.update({ ...editingItem, ...data });
+    } else {
+      if (allData.length >= 999) {
+        showToast('Limite de 999 itens atingido!', 'error');
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+        return;
+      }
+      result = await window.dataSdk.create(data);
+    }
+
+    btn.disabled = false;
+    spinner.classList.add('hidden');
+
+    if (result.isOk) {
+      showToast(editingItem ? 'Item atualizado!' : 'Item cadastrado!', 'success');
+      closeForm();
+    } else {
+      showToast('Erro ao salvar. Tente novamente.', 'error');
+    }
+  });
+
+  function openMovementForm(type = 'entrada') {
+    movementType = type;
+    const isEntrada = type === 'entrada';
+    document.getElementById('movement-title').textContent = isEntrada ? 'Registrar Entrada' : 'Registrar Saída';
+    document.getElementById('movement-submit-text').textContent = 'Registrar ' + (isEntrada ? 'Entrada' : 'Saída');
+    document.getElementById('movement-form').reset();
+    document.getElementById('movement-modal').classList.remove('hidden');
+    document.getElementById('movement-modal').classList.add('flex');
+    lucide.createIcons();
+  }
+
+  function closeMovementForm() {
+    document.getElementById('movement-modal').classList.add('hidden');
+    document.getElementById('movement-modal').classList.remove('flex');
+  }
+
+  document.getElementById('movement-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const productId = document.getElementById('m-product').value;
+    const qty = parseInt(document.getElementById('m-qty').value) || 0;
+    const reason = document.getElementById('m-reason').value || 'sem motivo';
+    const user = document.getElementById('m-user').value.trim() || 'Sem responsável';
+
+    if (!productId || qty <= 0) {
+      showToast('Preencha todos os campos obrigatórios', 'error');
+      return;
+    }
+
+    const product = allData.find(p => p.__backendId === productId);
+    if (!product) {
+      showToast('Produto não encontrado', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('movement-submit-btn');
+    const spinner = document.getElementById('movement-spinner');
+    btn.disabled = true;
+    spinner.classList.remove('hidden');
+
+    const isEntrada = movementType === 'entrada';
+    const newQty = isEntrada ? (product.quantity || 0) + qty : Math.max(0, (product.quantity || 0) - qty);
+
+    const movementData = {
+      name: `MOV_${Date.now()}`,
+      product_id: productId,
+      movement_type: movementType,
+      movement_qty: qty,
+      movement_reason: reason,
+      movement_date: new Date().toISOString(),
+      movement_user: user,
+      created_at: new Date().toISOString()
+    };
+
+    const updateProductResult = await window.dataSdk.update({ ...product, quantity: newQty });
+    if (updateProductResult.isError) {
+      btn.disabled = false;
+      spinner.classList.add('hidden');
+      showToast('Erro ao atualizar produto', 'error');
+      return;
+    }
+
+    const createMovementResult = await window.dataSdk.create(movementData);
+    btn.disabled = false;
+    spinner.classList.add('hidden');
+
+    if (createMovementResult.isOk) {
+      showToast(`${isEntrada ? 'Entrada' : 'Saída'} registrada com sucesso!`, 'success');
+      closeMovementForm();
+    } else {
+      showToast('Erro ao registrar movimentação', 'error');
+    }
+  });
+
+  function confirmDelete(id) {
+    deleteTarget = allData.find(i => i.__backendId === id);
+    if (!deleteTarget) return;
+    document.getElementById('delete-modal').classList.remove('hidden');
+    document.getElementById('delete-modal').classList.add('flex');
+  }
+
+  function closeDeleteModal() {
+    document.getElementById('delete-modal').classList.add('hidden');
+    document.getElementById('delete-modal').classList.remove('flex');
+    deleteTarget = null;
+  }
+
+  document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
+    if (!deleteTarget) return;
+    const btn = document.getElementById('confirm-delete-btn');
+    btn.disabled = true;
+    btn.textContent = 'Excluindo...';
+    const result = await window.dataSdk.delete(deleteTarget);
+    btn.disabled = false;
+    btn.textContent = 'Excluir';
+    if (result.isOk) {
+      showToast('Item excluído!', 'success');
+    } else {
+      showToast('Erro ao excluir.', 'error');
+    }
+    closeDeleteModal();
+  });
+
+  function showToast(msg, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    const colors = type === 'success' ? 'bg-emerald-600' : 'bg-red-600';
+    toast.className = `${colors} text-white text-sm px-4 py-3 rounded-xl shadow-lg toast-enter font-medium`;
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(() => { toast.classList.add('toast-exit'); setTimeout(() => toast.remove(), 300); }, 2500);
+  }
+
+  document.getElementById('form-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeForm(); });
+  document.getElementById('delete-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeDeleteModal(); });
+  document.getElementById('movement-modal').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeMovementForm(); });
+
+  lucide.createIcons();
+</script>
+</body>
+</html>
